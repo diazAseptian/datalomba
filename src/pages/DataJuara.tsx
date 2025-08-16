@@ -284,6 +284,7 @@ const DataJuara: React.FC = () => {
               </p>
             </div>
           ) : (
+            <>
             {/* Mobile Card View */}
             <div className="block sm:hidden space-y-4">
               {peserta.map((item, index) => (
@@ -362,6 +363,7 @@ const DataJuara: React.FC = () => {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
       </div>

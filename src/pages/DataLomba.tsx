@@ -179,7 +179,8 @@ const DataLomba: React.FC = () => {
               </p>
             </div>
           ) : (
-            {/* Mobile Card View */}
+            <div>
+              {/* Mobile Card View */}
             <div className="block sm:hidden space-y-4">
               {lomba.map((item) => (
                 <div key={item.id} className="bg-gray-50 rounded-lg p-4">
@@ -282,6 +283,7 @@ const DataLomba: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </div>

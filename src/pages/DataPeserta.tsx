@@ -202,8 +202,6 @@ const DataPeserta: React.FC = () => {
     return { grouped, unassigned }
   }
 
-
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -278,22 +276,22 @@ const DataPeserta: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Data Peserta</h1>
           <p className="text-gray-600">Kelola data peserta lomba</p>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={() => setViewMode(viewMode === 'table' ? 'groups' : 'table')}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
           >
             {viewMode === 'table' ? <Users className="h-4 w-4 mr-2" /> : <Filter className="h-4 w-4 mr-2" />}
             {viewMode === 'table' ? 'Lihat Grup' : 'Lihat Tabel'}
           </button>
           <button
             onClick={() => setShowForm(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
           >
             <Plus className="h-4 w-4 mr-2" />
             Tambah Peserta
@@ -303,7 +301,7 @@ const DataPeserta: React.FC = () => {
 
       {/* Filter Section */}
       <div className="bg-white p-4 rounded-lg shadow">
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-4">
           <div className="flex items-center space-x-2">
             <Filter className="h-4 w-4 text-gray-500" />
             <label className="text-sm font-medium text-gray-700">Filter Lomba:</label>
@@ -455,101 +453,103 @@ const DataPeserta: React.FC = () => {
                 </p>
               </div>
             ) : (
-              {/* Mobile Card View */}
-              <div className="block sm:hidden space-y-4">
-                {filteredPeserta.map((item) => (
-                  <div key={item.id} className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center">
-                        <User className="h-5 w-5 text-red-600 mr-2" />
-                        <h3 className="font-medium text-gray-900">{item.nama}</h3>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="p-2 text-blue-600 hover:bg-blue-100 rounded"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="p-2 text-red-600 hover:bg-red-100 rounded"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <div><span className="font-medium">Lomba:</span> {item.lomba?.nama || '-'}</div>
-                      <div className="flex items-center">
-                        <span className="font-medium mr-2">Status:</span>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPosisiColor(item.posisi)}`}>
-                          {item.posisi > 0 && <Trophy className="h-3 w-3 mr-1" />}
-                          {getPosisiText(item.posisi)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              {/* Desktop Table View */}
-              <div className="hidden sm:block overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Nama
-                      </th>
-                      <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Lomba
-                      </th>
-                      <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Posisi Juara
-                      </th>
-                      <th className="px-3 lg:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Aksi
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredPeserta.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <User className="h-5 w-5 text-gray-400 mr-3" />
-                            <div className="text-sm font-medium text-gray-900">
-                              {item.nama}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {item.lomba?.nama || '-'}
-                        </td>
-                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPosisiColor(item.posisi)}`}>
-                            {item.posisi > 0 && <Trophy className="h-3 w-3 mr-1" />}
-                            {getPosisiText(item.posisi)}
-                          </span>
-                        </td>
-                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+              <div>
+                {/* Mobile Card View */}
+                <div className="block sm:hidden space-y-4">
+                  {filteredPeserta.map((item) => (
+                    <div key={item.id} className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center">
+                          <User className="h-5 w-5 text-red-600 mr-2" />
+                          <h3 className="font-medium text-gray-900">{item.nama}</h3>
+                        </div>
+                        <div className="flex space-x-2">
                           <button
                             onClick={() => handleEdit(item)}
-                            className="text-blue-600 hover:text-blue-900"
+                            className="p-2 text-blue-600 hover:bg-blue-100 rounded"
                           >
                             <Edit className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(item.id)}
-                            className="text-red-600 hover:text-red-900"
+                            className="p-2 text-red-600 hover:bg-red-100 rounded"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
-                        </td>
+                        </div>
+                      </div>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <div><span className="font-medium">Lomba:</span> {item.lomba?.nama || '-'}</div>
+                        <div className="flex items-center">
+                          <span className="font-medium mr-2">Status:</span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPosisiColor(item.posisi)}`}>
+                            {item.posisi > 0 && <Trophy className="h-3 w-3 mr-1" />}
+                            {getPosisiText(item.posisi)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Desktop Table View */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Nama
+                        </th>
+                        <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Lomba
+                        </th>
+                        <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Posisi Juara
+                        </th>
+                        <th className="px-3 lg:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Aksi
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredPeserta.map((item) => (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <User className="h-5 w-5 text-gray-400 mr-3" />
+                              <div className="text-sm font-medium text-gray-900">
+                                {item.nama}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {item.lomba?.nama || '-'}
+                          </td>
+                          <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPosisiColor(item.posisi)}`}>
+                              {item.posisi > 0 && <Trophy className="h-3 w-3 mr-1" />}
+                              {getPosisiText(item.posisi)}
+                            </span>
+                          </td>
+                          <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                            <button
+                              onClick={() => handleEdit(item)}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.id)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
