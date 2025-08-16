@@ -145,24 +145,24 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 lg:gap-6">
         {cards.map((card, index) => {
           const Icon = card.icon
           return (
             <div key={index} className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <div className={`inline-flex items-center justify-center p-3 ${card.color} rounded-md shadow-lg`}>
-                      <Icon className="h-6 w-6 text-white" />
+              <div className="p-3 sm:p-5">
+                <div className="flex flex-col sm:flex-row items-center sm:items-start">
+                  <div className="flex-shrink-0 mb-2 sm:mb-0">
+                    <div className={`inline-flex items-center justify-center p-2 sm:p-3 ${card.color} rounded-md shadow-lg`}>
+                      <Icon className="h-4 w-4 sm:h-6 sm:w-6 text-white" />
                     </div>
                   </div>
-                  <div className="ml-5 w-0 flex-1">
+                  <div className="sm:ml-5 w-0 flex-1 text-center sm:text-left">
                     <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">
+                      <dt className="text-xs sm:text-sm font-medium text-gray-500 truncate">
                         {card.name}
                       </dt>
-                      <dd className="text-3xl font-bold text-gray-900">
+                      <dd className="text-xl sm:text-3xl font-bold text-gray-900">
                         {card.value}
                       </dd>
                     </dl>
@@ -175,17 +175,23 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
         {/* Bar Chart */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow">
+          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">
             Distribusi Posisi Peserta
           </h3>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={250}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
+              <XAxis 
+                dataKey="name" 
+                fontSize={12}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis fontSize={12} />
               <Tooltip />
               <Bar dataKey="value" fill="#8884d8" />
             </BarChart>
@@ -193,19 +199,25 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Pie Chart */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow">
+          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">
             Persentase Juara
           </h3>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={250}>
             <PieChart>
               <Pie
                 data={pieData}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                outerRadius={80}
+                label={({ name, percent }) => {
+                  // Hide labels on small screens
+                  if (window.innerWidth < 640) {
+                    return `${(percent * 100).toFixed(0)}%`
+                  }
+                  return `${name} (${(percent * 100).toFixed(0)}%)`
+                }}
+                outerRadius={window.innerWidth < 640 ? 60 : 80}
                 fill="#8884d8"
                 dataKey="value"
               >

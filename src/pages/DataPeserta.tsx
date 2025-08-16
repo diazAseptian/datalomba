@@ -455,20 +455,59 @@ const DataPeserta: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              {/* Mobile Card View */}
+              <div className="block sm:hidden space-y-4">
+                {filteredPeserta.map((item) => (
+                  <div key={item.id} className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center">
+                        <User className="h-5 w-5 text-red-600 mr-2" />
+                        <h3 className="font-medium text-gray-900">{item.nama}</h3>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleEdit(item)}
+                          className="p-2 text-blue-600 hover:bg-blue-100 rounded"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          className="p-2 text-red-600 hover:bg-red-100 rounded"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-600 space-y-1">
+                      <div><span className="font-medium">Lomba:</span> {item.lomba?.nama || '-'}</div>
+                      <div className="flex items-center">
+                        <span className="font-medium mr-2">Status:</span>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPosisiColor(item.posisi)}`}>
+                          {item.posisi > 0 && <Trophy className="h-3 w-3 mr-1" />}
+                          {getPosisiText(item.posisi)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Desktop Table View */}
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Nama
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Lomba
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Posisi Juara
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-3 lg:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Aksi
                       </th>
                     </tr>
@@ -476,7 +515,7 @@ const DataPeserta: React.FC = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredPeserta.map((item) => (
                       <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <User className="h-5 w-5 text-gray-400 mr-3" />
                             <div className="text-sm font-medium text-gray-900">
@@ -484,16 +523,16 @@ const DataPeserta: React.FC = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {item.lomba?.nama || '-'}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPosisiColor(item.posisi)}`}>
                             {item.posisi > 0 && <Trophy className="h-3 w-3 mr-1" />}
                             {getPosisiText(item.posisi)}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                        <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                           <button
                             onClick={() => handleEdit(item)}
                             className="text-blue-600 hover:text-blue-900"

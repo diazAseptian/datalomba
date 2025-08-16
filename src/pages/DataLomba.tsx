@@ -88,14 +88,14 @@ const DataLomba: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Data Lomba</h1>
           <p className="text-gray-600">Kelola data lomba 17 Agustus</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 w-full sm:w-auto"
         >
           <Plus className="h-4 w-4 mr-2" />
           Tambah Lomba
@@ -179,20 +179,63 @@ const DataLomba: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            {/* Mobile Card View */}
+            <div className="block sm:hidden space-y-4">
+              {lomba.map((item) => (
+                <div key={item.id} className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center">
+                      <Calendar className="h-5 w-5 text-red-600 mr-2" />
+                      <h3 className="font-medium text-gray-900">{item.nama}</h3>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleEdit(item)}
+                        className="p-2 text-blue-600 hover:bg-blue-100 rounded"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        className="p-2 text-red-600 hover:bg-red-100 rounded"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <div className="flex items-center">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      {new Date(item.tanggal).toLocaleDateString('id-ID', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric'
+                      })}
+                    </div>
+                    <div className="flex items-center">
+                      <MapPin className="h-4 w-4 mr-2" />
+                      {item.lokasi || '-'}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Desktop Table View */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Nama Lomba
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Tanggal
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Lokasi
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 lg:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Aksi
                     </th>
                   </tr>
@@ -200,7 +243,7 @@ const DataLomba: React.FC = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {lomba.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <Calendar className="h-5 w-5 text-gray-400 mr-3" />
                           <div className="text-sm font-medium text-gray-900">
@@ -208,20 +251,20 @@ const DataLomba: React.FC = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(item.tanggal).toLocaleDateString('id-ID', {
                           day: 'numeric',
                           month: 'long',
                           year: 'numeric'
                         })}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center text-sm text-gray-500">
                           <MapPin className="h-4 w-4 mr-2" />
                           {item.lokasi || '-'}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                      <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                         <button
                           onClick={() => handleEdit(item)}
                           className="text-blue-600 hover:text-blue-900"

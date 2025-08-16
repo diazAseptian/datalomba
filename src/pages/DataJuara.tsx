@@ -121,64 +121,62 @@ const DataJuara: React.FC = () => {
       const doc = new jsPDF()
       
       // Add title
-      doc.setFontSize(18)
+      doc.setFontSize(16)
       doc.setFont('helvetica', 'bold')
-      
-      let title = 'Daftar Juara Lomba 17 Agustus'
-      if (filters.lomba_id) {
-        const selectedLomba = lomba.find(l => l.id === filters.lomba_id)
-        if (selectedLomba) {
-          title = `Daftar Juara - ${selectedLomba.nama}`
-        }
-      }
-      
-      doc.text(title, 20, 20)
+      doc.text('Daftar Juara Lomba 17 Agustus', 105, 20, { align: 'center' })
       
       // Add subtitle
       doc.setFontSize(12)
       doc.setFont('helvetica', 'normal')
-      doc.text('Taruna Karya Kampung Ciperang', 20, 30)
-      doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 20, 40)
+      doc.text('Taruna Karya Kampung Ciperang', 105, 30, { align: 'center' })
+      doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 105, 40, { align: 'center' })
 
-      // Prepare table data
-      const tableData = peserta.map((item, index) => [
-        index + 1,
-        item.nama || '',
-        item.lomba?.nama || '-',
-        item.grup?.nama || '-',
-        getPosisiText(item.posisi)
-      ])
+      // Table setup
+      const startY = 60
+      const rowHeight = 10
+      const cols = [
+        { header: 'No', x: 15, width: 15 },
+        { header: 'Nama Peserta', x: 30, width: 50 },
+        { header: 'Lomba', x: 80, width: 45 },
+        { header: 'Grup', x: 125, width: 30 },
+        { header: 'Juara', x: 155, width: 30 }
+      ]
 
-      // Add table
-      doc.autoTable({
-        startY: 50,
-        head: [['No', 'Nama Peserta', 'Lomba', 'Grup', 'Juara']],
-        body: tableData,
-        styles: {
-          fontSize: 9,
-          cellPadding: 3,
-        },
-        headStyles: {
-          fillColor: [220, 38, 38],
-          textColor: 255,
-          fontStyle: 'bold',
-        },
-        alternateRowStyles: {
-          fillColor: [245, 245, 245],
-        },
-        columnStyles: {
-          0: { halign: 'center', cellWidth: 15 },
-          1: { cellWidth: 50 },
-          2: { cellWidth: 40 },
-          3: { cellWidth: 35 },
-          4: { halign: 'center', cellWidth: 30 },
-        },
-        margin: { top: 50 },
+      // Draw table header
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'bold')
+      cols.forEach(col => {
+        doc.text(col.header, col.x, startY)
+      })
+      
+      // Header line
+      doc.line(15, startY + 2, 185, startY + 2)
+      
+      // Data rows
+      doc.setFont('helvetica', 'normal')
+      let currentY = startY + rowHeight
+      
+      peserta.forEach((item, index) => {
+        if (currentY > 270) {
+          doc.addPage()
+          currentY = 20
+        }
+        
+        // Truncate long text
+        const truncateText = (text: string, maxLength: number) => {
+          return text.length > maxLength ? text.substring(0, maxLength - 3) + '...' : text
+        }
+        
+        doc.text((index + 1).toString(), cols[0].x, currentY)
+        doc.text(truncateText(item.nama || '', 20), cols[1].x, currentY)
+        doc.text(truncateText(item.lomba?.nama || '-', 18), cols[2].x, currentY)
+        doc.text(truncateText(item.grup?.nama || '-', 12), cols[3].x, currentY)
+        doc.text(getPosisiText(item.posisi), cols[4].x, currentY)
+        
+        currentY += rowHeight
       })
 
-      // Save the PDF
-      const filename = 'daftar-juara.pdf'
-      doc.save(filename)
+      doc.save('daftar-juara.pdf')
     } catch (error) {
       console.error('Error generating PDF:', error)
       alert('Gagal membuat PDF. Silakan coba lagi.')
@@ -195,7 +193,7 @@ const DataJuara: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Data Juara</h1>
           <p className="text-gray-600">Daftar pemenang lomba 17 Agustus</p>
@@ -203,7 +201,7 @@ const DataJuara: React.FC = () => {
         <button
           onClick={exportToPDF}
           disabled={peserta.length === 0}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
         >
           <Download className="h-4 w-4 mr-2" />
           Export PDF
@@ -214,7 +212,7 @@ const DataJuara: React.FC = () => {
       <div className="bg-white p-4 rounded-lg shadow">
         <div className="flex items-center space-x-4">
           <Filter className="h-5 w-5 text-gray-400" />
-          <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Filter Lomba
@@ -286,23 +284,49 @@ const DataJuara: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            {/* Mobile Card View */}
+            <div className="block sm:hidden space-y-4">
+              {peserta.map((item, index) => (
+                <div key={item.id} className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center">
+                      <div className="w-6 h-6 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-xs font-medium mr-2">
+                        {index + 1}
+                      </div>
+                      <Trophy className="h-4 w-4 text-yellow-500 mr-2" />
+                      <span className="font-medium text-gray-900">{item.nama}</span>
+                    </div>
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getPosisiColor(item.posisi)}`}>
+                      <Trophy className="h-3 w-3 mr-1" />
+                      {getPosisiText(item.posisi)}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <div><span className="font-medium">Lomba:</span> {item.lomba?.nama || '-'}</div>
+                    <div><span className="font-medium">Grup:</span> {item.grup?.nama || '-'}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Desktop Table View */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       No
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Nama Peserta
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Lomba
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Grup
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Juara
                     </th>
                   </tr>
@@ -310,10 +334,10 @@ const DataJuara: React.FC = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {peserta.map((item, index) => (
                     <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {index + 1}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <Trophy className="h-5 w-5 text-yellow-500 mr-3" />
                           <div className="text-sm font-medium text-gray-900">
@@ -321,13 +345,13 @@ const DataJuara: React.FC = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {item.lomba?.nama || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {item.grup?.nama || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getPosisiColor(item.posisi)}`}>
                           <Trophy className="h-3 w-3 mr-1" />
                           {getPosisiText(item.posisi)}
