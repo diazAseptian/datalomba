@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import DataLomba from './pages/DataLomba'
 import DataPeserta from './pages/DataPeserta'
 import DataJuara from './pages/DataJuara'
+import StatistikPeserta from './pages/StatistikPeserta'
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
                     <Route path="/lomba" element={<DataLomba />} />
                     <Route path="/peserta" element={<DataPeserta />} />
                     <Route path="/juara" element={<DataJuara />} />
+                    <Route path="/statistik" element={<StatistikPeserta />} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>

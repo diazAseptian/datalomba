@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { LogOut, Trophy, Users, Calendar, Award, Menu, X } from 'lucide-react'
+import { LogOut, Trophy, Users, Calendar, Award, Menu, X, BarChart3 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 
 interface LayoutProps {
@@ -17,6 +17,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { name: 'Data Lomba', href: '/lomba', icon: Calendar },
     { name: 'Data Peserta', href: '/peserta', icon: Users },
     { name: 'Data Juara', href: '/juara', icon: Award },
+    { name: 'Statistik Peserta', href: '/statistik', icon: BarChart3 },
   ]
 
   const handleSignOut = async () => {

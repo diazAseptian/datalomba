@@ -22,6 +22,10 @@ const DataPeserta: React.FC = () => {
   const [showGroupForm, setShowGroupForm] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [groupsLoading, setGroupsLoading] = useState(false)
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
+  const [editingPesertaId, setEditingPesertaId] = useState<string | null>(null)
+  const [showEditPosisiForm, setShowEditPosisiForm] = useState(false)
+  const [editPosisi, setEditPosisi] = useState(0)
   const [formData, setFormData] = useState({
     nama: '',
     lomba_id: '',
@@ -134,16 +138,50 @@ const DataPeserta: React.FC = () => {
   const createNewGroup = async () => {
     if (!newGroupName.trim() || !selectedLomba) return
     
-    await supabase
-      .from('grup')
-      .insert({
-        nama: newGroupName,
-        lomba_id: selectedLomba
-      })
+    if (editingGroupId) {
+      await supabase
+        .from('grup')
+        .update({ nama: newGroupName })
+        .eq('id', editingGroupId)
+    } else {
+      await supabase
+        .from('grup')
+        .insert({
+          nama: newGroupName,
+          lomba_id: selectedLomba
+        })
+    }
     
     setNewGroupName('')
+    setEditingGroupId(null)
     setShowGroupForm(false)
     fetchGroups()
+  }
+
+  const handleEditGroup = (grup: Grup) => {
+    setNewGroupName(grup.nama)
+    setEditingGroupId(grup.id)
+    setShowGroupForm(true)
+  }
+
+  const handleEditPosisi = (peserta: Peserta) => {
+    setEditingPesertaId(peserta.id)
+    setEditPosisi(peserta.posisi)
+    setShowEditPosisiForm(true)
+  }
+
+  const updatePosisi = async () => {
+    if (!editingPesertaId) return
+    
+    await supabase
+      .from('peserta')
+      .update({ posisi: editPosisi })
+      .eq('id', editingPesertaId)
+    
+    setEditingPesertaId(null)
+    setEditPosisi(0)
+    setShowEditPosisiForm(false)
+    fetchData()
   }
 
   const assignToGroup = async (pesertaId: string, grupId: string) => {
@@ -608,6 +646,12 @@ const DataPeserta: React.FC = () => {
                                 {anggotaGrup.length} orang
                               </span>
                               <button
+                                onClick={() => handleEditGroup(grup)}
+                                className="text-blue-600 hover:text-blue-900"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </button>
+                              <button
                                 onClick={() => deleteGroup(grup.id)}
                                 className="text-red-600 hover:text-red-900"
                               >
@@ -632,18 +676,27 @@ const DataPeserta: React.FC = () => {
                                     </span>
                                   </div>
                                   <div className="flex items-center space-x-2">
-                                    {anggota.posisi > 0 && (
-                                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPosisiColor(anggota.posisi)}`}>
-                                        <Trophy className="h-3 w-3 mr-1" />
-                                        {getPosisiText(anggota.posisi)}
-                                      </span>
-                                    )}
-                                    <button
-                                      onClick={() => removeFromGroup(anggota.id)}
-                                      className="opacity-0 group-hover:opacity-100 text-red-600 hover:text-red-900 transition-opacity"
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </button>
+                                    <div className="flex items-center space-x-1">
+                                      <button
+                                        onClick={() => handleEditPosisi(anggota)}
+                                        className="opacity-0 group-hover:opacity-100 text-blue-600 hover:text-blue-900 transition-opacity"
+                                        title="Edit Posisi Juara"
+                                      >
+                                        <Trophy className="h-3 w-3" />
+                                      </button>
+                                      {anggota.posisi > 0 && (
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPosisiColor(anggota.posisi)}`}>
+                                          <Trophy className="h-3 w-3 mr-1" />
+                                          {getPosisiText(anggota.posisi)}
+                                        </span>
+                                      )}
+                                      <button
+                                        onClick={() => removeFromGroup(anggota.id)}
+                                        className="opacity-0 group-hover:opacity-100 text-red-600 hover:text-red-900 transition-opacity"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               ))
@@ -713,7 +766,7 @@ const DataPeserta: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
             <h2 className="text-lg font-medium text-gray-900 mb-4">
-              Buat Grup Baru untuk {lomba.find(l => l.id === selectedLomba)?.nama}
+              {editingGroupId ? 'Edit Nama Grup' : `Buat Grup Baru untuk ${lomba.find(l => l.id === selectedLomba)?.nama}`}
             </h2>
             <div className="space-y-4">
               <div>
@@ -735,12 +788,59 @@ const DataPeserta: React.FC = () => {
                   disabled={!newGroupName.trim() || !selectedLomba}
                   className="flex-1 bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
-                  Buat Grup
+                  {editingGroupId ? 'Update' : 'Buat Grup'}
                 </button>
                 <button
                   onClick={() => {
                     setShowGroupForm(false)
                     setNewGroupName('')
+                    setEditingGroupId(null)
+                  }}
+                  className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Posisi Modal */}
+      {showEditPosisiForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">
+              Edit Posisi Juara
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Posisi Juara
+                </label>
+                <select
+                  value={editPosisi}
+                  onChange={(e) => setEditPosisi(parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                >
+                  <option value={0}>Belum Juara</option>
+                  <option value={1}>Juara 1</option>
+                  <option value={2}>Juara 2</option>
+                  <option value={3}>Juara 3</option>
+                </select>
+              </div>
+              <div className="flex space-x-3 pt-4">
+                <button
+                  onClick={updatePosisi}
+                  className="flex-1 bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  Update
+                </button>
+                <button
+                  onClick={() => {
+                    setShowEditPosisiForm(false)
+                    setEditingPesertaId(null)
+                    setEditPosisi(0)
                   }}
                   className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
