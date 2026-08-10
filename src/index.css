@@ -1,3 +1,36 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Hero animations — content always visible, animation is enhancement only */
+.hero-animate {
+  animation: heroFadeUp 0.6s ease-out both;
+}
+
+@keyframes heroFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Diagonal stripe pattern for hero background */
+.hero-pattern {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 20px,
+    rgba(255, 255, 255, 0.03) 20px,
+    rgba(255, 255, 255, 0.03) 40px
+  );
+}
+
+/* Countdown digit flip feel */
+.countdown-digit {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}

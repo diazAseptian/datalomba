@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { Plus, Edit, Trash2, User, Trophy, Filter, Users, Shuffle } from 'lucide-react'
-import { Database } from '../lib/supabase'
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, writeBatch } from 'firebase/firestore'
+import { db, Lomba, Peserta as PesertaType, Grup } from '../lib/firebase'
+import { Plus, Edit, Trash2, User, Trophy, Filter, Users, Shuffle, Search } from 'lucide-react'
+import { useTahun } from '../contexts/TahunContext'
+import Toast, { ToastType } from '../components/Toast'
+import ConfirmDialog from '../components/ConfirmDialog'
 
-type Peserta = Database['public']['Tables']['peserta']['Row'] & {
-  lomba?: { nama: string }
-}
-type Lomba = Database['public']['Tables']['lomba']['Row']
-type Grup = Database['public']['Tables']['grup']['Row']
+type Peserta = PesertaType
 
 const DataPeserta: React.FC = () => {
   const [peserta, setPeserta] = useState<Peserta[]>([])
@@ -24,138 +23,146 @@ const DataPeserta: React.FC = () => {
   const [groupsLoading, setGroupsLoading] = useState(false)
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
   const [editingPesertaId, setEditingPesertaId] = useState<string | null>(null)
-  const [showEditPosisiForm, setShowEditPosisiForm] = useState(false)
-  const [editPosisi, setEditPosisi] = useState(0)
-  const [formData, setFormData] = useState({
-    nama: '',
-    lomba_id: '',
-    posisi: 0,
-  })
+  const [searchQuery, setSearchQuery] = useState('')
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [formData, setFormData] = useState({ nama: '', lomba_id: '', posisi: 0 })
+  const { tahunAktif } = useTahun()
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  const [autocomplete, setAutocomplete] = useState<string[]>([])
+  const [showAutocomplete, setShowAutocomplete] = useState(false)
+
+  const showToast = (message: string, type: ToastType) => setToast({ message, type })
+
+  const toTitleCase = (str: string) =>
+    str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase())
+
+  const uniqueNames = Array.from(new Set(peserta.map(p => p.nama))).sort()
+
+  const handleNamaChange = (value: string) => {
+    const formatted = toTitleCase(value)
+    setFormData({ ...formData, nama: formatted })
+    if (value.trim().length > 0) {
+      const suggestions = uniqueNames.filter(n =>
+        n.toLowerCase().includes(value.toLowerCase()) && n.toLowerCase() !== value.toLowerCase()
+      )
+      setAutocomplete(suggestions.slice(0, 5))
+      setShowAutocomplete(suggestions.length > 0)
+    } else {
+      setShowAutocomplete(false)
+    }
+  }
+
+  const selectAutocomplete = (name: string) => {
+    setFormData({ ...formData, nama: name })
+    setShowAutocomplete(false)
+  }
+
+  useEffect(() => { fetchData() }, [tahunAktif])
 
   const fetchData = async () => {
-    // Fetch peserta with lomba name
-    const { data: pesertaData } = await supabase
-      .from('peserta')
-      .select(`
-        *,
-        lomba:lomba_id (nama)
-      `)
-      .order('created_at', { ascending: false })
-
-    // Fetch all lomba for dropdown
-    const { data: lombaData } = await supabase
-      .from('lomba')
-      .select('*')
-      .order('nama')
-
-    if (pesertaData) setPeserta(pesertaData)
-    if (lombaData) setLomba(lombaData)
-    setLoading(false)
+    try {
+      const [pesertaSnap, lombaSnap] = await Promise.all([
+        getDocs(query(collection(db, 'peserta'), orderBy('created_at', 'desc'))),
+        getDocs(query(collection(db, 'lomba'), orderBy('nama'))),
+      ])
+      const lombaList = lombaSnap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Lomba))
+        .filter(l => ((l as any).tahun ?? new Date(l.tanggal).getFullYear()) === tahunAktif)
+      const lombaMap = new Map(lombaList.map(l => [l.id, l.nama]))
+      const lombaIds = new Set(lombaList.map(l => l.id))
+      const pesertaList = pesertaSnap.docs
+        .map(d => {
+          const data = { id: d.id, ...d.data() } as Peserta
+          data.lomba = lombaMap.has(data.lomba_id) ? { nama: lombaMap.get(data.lomba_id)! } : undefined
+          return data
+        })
+        .filter(p => lombaIds.has(p.lomba_id))
+      setPeserta(pesertaList)
+      setLomba(lombaList)
+      setSelectedLomba('')
+    } catch {
+      showToast('Gagal memuat data', 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const fetchGroups = async () => {
     if (!selectedLomba) {
       setGroups([])
+      setGroupsLoading(false)
       return
     }
-    
     setGroupsLoading(true)
-    const { data } = await supabase
-      .from('grup')
-      .select('*')
-      .eq('lomba_id', selectedLomba)
-      .order('nama')
-    
-    if (data) setGroups(data)
-    setGroupsLoading(false)
+    try {
+      const snap = await getDocs(query(collection(db, 'grup'), where('lomba_id', '==', selectedLomba)))
+      setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() } as Grup)).sort((a, b) => a.nama.localeCompare(b.nama)))
+    } catch {
+      showToast('Gagal memuat grup', 'error')
+    } finally {
+      setGroupsLoading(false)
+    }
   }
 
   useEffect(() => {
     fetchGroups()
   }, [selectedLomba])
 
-  const filteredPeserta = selectedLomba 
-    ? peserta.filter(p => p.lomba_id === selectedLomba)
-    : peserta
+  const filteredPeserta = (selectedLomba ? peserta.filter(p => p.lomba_id === selectedLomba) : peserta)
+    .filter(p => p.nama.toLowerCase().includes(searchQuery.toLowerCase()))
 
   const generateGroups = async () => {
     if (!selectedLomba) return
-    
-    const participants = [...filteredPeserta]
-    let groupNumber = 1
-
-    // Shuffle array untuk randomisasi
-    for (let i = participants.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      ;[participants[i], participants[j]] = [participants[j], participants[i]]
-    }
-
-    // Clear existing groups for this lomba
-    await supabase.from('grup').delete().eq('lomba_id', selectedLomba)
-    
-    // Reset grup_id for all peserta in this lomba
-    await supabase
-      .from('peserta')
-      .update({ grup_id: null })
-      .eq('lomba_id', selectedLomba)
-
-    // Create new groups and assign participants
-    while (participants.length > 0) {
-      const groupSize = participants.length === 1 ? 1 : 
-                      participants.length <= grupSize ? participants.length :
-                      Math.min(grupSize, participants.length)
-      
-      // Create group
-      const { data: newGroup } = await supabase
-        .from('grup')
-        .insert({
-          nama: `Grup ${groupNumber}`,
-          lomba_id: selectedLomba
-        })
-        .select()
-        .single()
-      
-      if (newGroup) {
-        // Assign participants to group
-        const anggota = participants.splice(0, groupSize)
-        await supabase
-          .from('peserta')
-          .update({ grup_id: newGroup.id })
-          .in('id', anggota.map(p => p.id))
+    try {
+      const participants = [...filteredPeserta]
+      for (let i = participants.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [participants[i], participants[j]] = [participants[j], participants[i]]
       }
-      
-      groupNumber++
+      const existingGroups = await getDocs(query(collection(db, 'grup'), where('lomba_id', '==', selectedLomba)))
+      const batch1 = writeBatch(db)
+      existingGroups.docs.forEach(d => batch1.delete(d.ref))
+      await batch1.commit()
+      const pesertaSnap = await getDocs(query(collection(db, 'peserta'), where('lomba_id', '==', selectedLomba)))
+      const batch2 = writeBatch(db)
+      pesertaSnap.docs.forEach(d => batch2.update(d.ref, { grup_id: null }))
+      await batch2.commit()
+      let groupNumber = 1
+      while (participants.length > 0) {
+        const size = participants.length === 1 ? 1 : Math.min(grupSize, participants.length)
+        const newGroupRef = await addDoc(collection(db, 'grup'), { nama: `Grup ${groupNumber}`, lomba_id: selectedLomba, created_at: new Date().toISOString() })
+        const anggota = participants.splice(0, size)
+        const batch3 = writeBatch(db)
+        anggota.forEach(p => batch3.update(doc(db, 'peserta', p.id), { grup_id: newGroupRef.id }))
+        await batch3.commit()
+        groupNumber++
+      }
+      showToast('Grup berhasil diacak', 'success')
+      fetchGroups()
+      fetchData()
+    } catch {
+      showToast('Gagal mengacak grup', 'error')
     }
-
-    fetchGroups()
-    fetchData()
   }
 
   const createNewGroup = async () => {
     if (!newGroupName.trim() || !selectedLomba) return
-    
-    if (editingGroupId) {
-      await supabase
-        .from('grup')
-        .update({ nama: newGroupName })
-        .eq('id', editingGroupId)
-    } else {
-      await supabase
-        .from('grup')
-        .insert({
-          nama: newGroupName,
-          lomba_id: selectedLomba
-        })
+    try {
+      if (editingGroupId) {
+        await updateDoc(doc(db, 'grup', editingGroupId), { nama: newGroupName })
+        showToast('Grup berhasil diupdate', 'success')
+      } else {
+        await addDoc(collection(db, 'grup'), { nama: newGroupName, lomba_id: selectedLomba, created_at: new Date().toISOString() })
+        showToast('Grup berhasil dibuat', 'success')
+      }
+      setNewGroupName('')
+      setEditingGroupId(null)
+      setShowGroupForm(false)
+      fetchGroups()
+    } catch {
+      showToast('Gagal menyimpan grup', 'error')
     }
-    
-    setNewGroupName('')
-    setEditingGroupId(null)
-    setShowGroupForm(false)
-    fetchGroups()
   }
 
   const handleEditGroup = (grup: Grup) => {
@@ -166,57 +173,48 @@ const DataPeserta: React.FC = () => {
 
   const handleEditPosisi = (peserta: Peserta) => {
     setEditingPesertaId(peserta.id)
-    setEditPosisi(peserta.posisi)
-    setShowEditPosisiForm(true)
   }
 
-  const updatePosisi = async () => {
-    if (!editingPesertaId) return
-    
-    await supabase
-      .from('peserta')
-      .update({ posisi: editPosisi })
-      .eq('id', editingPesertaId)
-    
-    setEditingPesertaId(null)
-    setEditPosisi(0)
-    setShowEditPosisiForm(false)
-    fetchData()
+  const updatePosisiInline = async (pesertaId: string, posisi: number) => {
+    try {
+      await updateDoc(doc(db, 'peserta', pesertaId), { posisi })
+      fetchData()
+    } catch {
+      showToast('Gagal mengupdate posisi', 'error')
+    }
   }
 
   const assignToGroup = async (pesertaId: string, grupId: string) => {
-    await supabase
-      .from('peserta')
-      .update({ grup_id: grupId })
-      .eq('id', pesertaId)
-    
-    fetchData()
+    try {
+      await updateDoc(doc(db, 'peserta', pesertaId), { grup_id: grupId })
+      fetchData()
+    } catch {
+      showToast('Gagal memindahkan peserta', 'error')
+    }
   }
 
   const removeFromGroup = async (pesertaId: string) => {
-    await supabase
-      .from('peserta')
-      .update({ grup_id: null })
-      .eq('id', pesertaId)
-    
-    fetchData()
+    try {
+      await updateDoc(doc(db, 'peserta', pesertaId), { grup_id: null })
+      fetchData()
+    } catch {
+      showToast('Gagal mengeluarkan peserta dari grup', 'error')
+    }
   }
 
   const deleteGroup = async (grupId: string) => {
-    // Remove all assignments to this group
-    await supabase
-      .from('peserta')
-      .update({ grup_id: null })
-      .eq('grup_id', grupId)
-    
-    // Delete the group
-    await supabase
-      .from('grup')
-      .delete()
-      .eq('id', grupId)
-    
-    fetchGroups()
-    fetchData()
+    try {
+      const snap = await getDocs(query(collection(db, 'peserta'), where('grup_id', '==', grupId)))
+      const batch = writeBatch(db)
+      snap.docs.forEach(d => batch.update(d.ref, { grup_id: null }))
+      batch.delete(doc(db, 'grup', grupId))
+      await batch.commit()
+      showToast('Grup berhasil dihapus', 'success')
+      fetchGroups()
+      fetchData()
+    } catch {
+      showToast('Gagal menghapus grup', 'error')
+    }
   }
 
   const getGroupedPeserta = () => {
@@ -242,22 +240,31 @@ const DataPeserta: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (editingId) {
-      await supabase
-        .from('peserta')
-        .update(formData)
-        .eq('id', editingId)
-    } else {
-      await supabase
-        .from('peserta')
-        .insert([formData])
+    try {
+      const namaFormatted = toTitleCase(formData.nama.trim())
+      const isDuplicate = peserta.some(
+        p => p.nama.toLowerCase() === namaFormatted.toLowerCase()
+          && p.lomba_id === formData.lomba_id
+          && p.id !== editingId
+      )
+      if (isDuplicate) {
+        showToast(`"${namaFormatted}" sudah terdaftar di lomba ini`, 'error')
+        return
+      }
+      if (editingId) {
+        await updateDoc(doc(db, 'peserta', editingId), { ...formData, nama: namaFormatted })
+        showToast('Peserta berhasil diupdate', 'success')
+      } else {
+        await addDoc(collection(db, 'peserta'), { ...formData, nama: namaFormatted, created_at: new Date().toISOString() })
+        showToast('Peserta berhasil ditambahkan', 'success')
+      }
+      setFormData({ nama: '', lomba_id: '', posisi: 0 })
+      setEditingId(null)
+      setShowForm(false)
+      fetchData()
+    } catch {
+      showToast('Gagal menyimpan data peserta', 'error')
     }
-
-    setFormData({ nama: '', lomba_id: '', posisi: 0 })
-    setEditingId(null)
-    setShowForm(false)
-    fetchData()
   }
 
   const handleEdit = (item: Peserta) => {
@@ -271,12 +278,14 @@ const DataPeserta: React.FC = () => {
   }
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Yakin ingin menghapus peserta ini?')) {
-      await supabase
-        .from('peserta')
-        .delete()
-        .eq('id', id)
+    try {
+      await deleteDoc(doc(db, 'peserta', id))
+      showToast('Peserta berhasil dihapus', 'success')
       fetchData()
+    } catch {
+      showToast('Gagal menghapus peserta', 'error')
+    } finally {
+      setConfirmDelete(null)
     }
   }
 
@@ -284,6 +293,7 @@ const DataPeserta: React.FC = () => {
     setFormData({ nama: '', lomba_id: '', posisi: 0 })
     setEditingId(null)
     setShowForm(false)
+    setShowAutocomplete(false)
   }
 
   const getPosisiText = (posisi: number) => {
@@ -297,12 +307,41 @@ const DataPeserta: React.FC = () => {
 
   const getPosisiColor = (posisi: number) => {
     switch (posisi) {
-      case 1: return 'bg-yellow-100 text-yellow-800'
-      case 2: return 'bg-gray-100 text-gray-800'
-      case 3: return 'bg-orange-100 text-orange-800'
-      default: return 'bg-blue-100 text-blue-800'
+      case 1: return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+      case 2: return 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+      case 3: return 'bg-orange-100 text-orange-800 hover:bg-orange-200'
+      default: return 'bg-blue-100 text-blue-800 hover:bg-blue-200'
     }
   }
+
+  const getPosisiIcon = (posisi: number) => {
+    switch (posisi) {
+      case 1: return '🥇'
+      case 2: return '🥈'
+      case 3: return '🥉'
+      default: return '—'
+    }
+  }
+
+  const PosisiDropdown = ({ id, posisi }: { id: string; posisi: number }) => (
+    <div className="relative inline-flex items-center gap-1">
+      <span className="text-base leading-none">{getPosisiIcon(posisi)}</span>
+      <select
+        value={posisi}
+        onChange={(e) => updatePosisiInline(id, parseInt(e.target.value))}
+        title="Klik untuk ubah posisi"
+        className={`appearance-none pl-2 pr-6 py-1 text-xs font-semibold rounded-full border border-transparent cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-400 ${getPosisiColor(posisi)}`}
+      >
+        <option value={0}>Belum Juara</option>
+        <option value={1}>Juara 1</option>
+        <option value={2}>Juara 2</option>
+        <option value={3}>Juara 3</option>
+      </select>
+      <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+    </div>
+  )
 
   if (loading) {
     return (
@@ -314,10 +353,18 @@ const DataPeserta: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {confirmDelete && (
+        <ConfirmDialog
+          message="Yakin ingin menghapus peserta ini?"
+          onConfirm={() => handleDelete(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Data Peserta</h1>
-          <p className="text-gray-600">Kelola data peserta lomba</p>
+          <p className="text-gray-600">Kelola data peserta lomba {tahunAktif}</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <button
@@ -395,6 +442,17 @@ const DataPeserta: React.FC = () => {
             </div>
           )}
           
+          <div className="flex items-center space-x-2 w-full sm:w-auto">
+            <Search className="h-4 w-4 text-gray-500 flex-shrink-0" />
+            <input
+              type="text"
+              placeholder="Cari nama peserta..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 w-full sm:w-48"
+            />
+          </div>
+
           <div className="text-sm text-gray-500">
             Total: {filteredPeserta.length} peserta
           </div>
@@ -413,14 +471,33 @@ const DataPeserta: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nama Peserta
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.nama}
-                  onChange={(e) => setFormData({ ...formData, nama: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  placeholder="Masukkan nama peserta"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    autoComplete="off"
+                    value={formData.nama}
+                    onChange={(e) => handleNamaChange(e.target.value)}
+                    onBlur={() => setTimeout(() => setShowAutocomplete(false), 150)}
+                    onFocus={() => formData.nama && handleNamaChange(formData.nama)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="Masukkan nama peserta"
+                  />
+                  {showAutocomplete && (
+                    <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
+                      {autocomplete.map((name) => (
+                        <li
+                          key={name}
+                          onMouseDown={() => selectAutocomplete(name)}
+                          className="px-3 py-2 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 cursor-pointer flex items-center gap-2"
+                        >
+                          <User className="h-3 w-3 text-gray-400" />
+                          {name}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -508,10 +585,7 @@ const DataPeserta: React.FC = () => {
                           >
                             <Edit className="h-4 w-4" />
                           </button>
-                          <button
-                            onClick={() => handleDelete(item.id)}
-                            className="p-2 text-red-600 hover:bg-red-100 rounded"
-                          >
+                          <button onClick={() => setConfirmDelete(item.id)} className="p-2 text-red-600 hover:bg-red-100 rounded">
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
@@ -520,10 +594,7 @@ const DataPeserta: React.FC = () => {
                         <div><span className="font-medium">Lomba:</span> {item.lomba?.nama || '-'}</div>
                         <div className="flex items-center">
                           <span className="font-medium mr-2">Status:</span>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPosisiColor(item.posisi)}`}>
-                            {item.posisi > 0 && <Trophy className="h-3 w-3 mr-1" />}
-                            {getPosisiText(item.posisi)}
-                          </span>
+                          <PosisiDropdown id={item.id} posisi={item.posisi} />
                         </div>
                       </div>
                     </div>
@@ -564,10 +635,7 @@ const DataPeserta: React.FC = () => {
                             {item.lomba?.nama || '-'}
                           </td>
                           <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPosisiColor(item.posisi)}`}>
-                              {item.posisi > 0 && <Trophy className="h-3 w-3 mr-1" />}
-                              {getPosisiText(item.posisi)}
-                            </span>
+                            <PosisiDropdown id={item.id} posisi={item.posisi} />
                           </td>
                           <td className="px-3 lg:px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                             <button
@@ -576,10 +644,7 @@ const DataPeserta: React.FC = () => {
                             >
                               <Edit className="h-4 w-4" />
                             </button>
-                            <button
-                              onClick={() => handleDelete(item.id)}
-                              className="text-red-600 hover:text-red-900"
-                            >
+                            <button onClick={() => setConfirmDelete(item.id)} className="text-red-600 hover:text-red-900">
                               <Trash2 className="h-4 w-4" />
                             </button>
                           </td>
@@ -684,12 +749,7 @@ const DataPeserta: React.FC = () => {
                                       >
                                         <Trophy className="h-3 w-3" />
                                       </button>
-                                      {anggota.posisi > 0 && (
-                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPosisiColor(anggota.posisi)}`}>
-                                          <Trophy className="h-3 w-3 mr-1" />
-                                          {getPosisiText(anggota.posisi)}
-                                        </span>
-                                      )}
+                                      <PosisiDropdown id={anggota.id} posisi={anggota.posisi} />
                                       <button
                                         onClick={() => removeFromGroup(anggota.id)}
                                         className="opacity-0 group-hover:opacity-100 text-red-600 hover:text-red-900 transition-opacity"
@@ -739,7 +799,7 @@ const DataPeserta: React.FC = () => {
                             </div>
                             <select
                               value={peserta.grup_id || ''}
-                              onChange={(e) => assignToGroup(peserta.id, e.target.value)}
+                              onChange={(e) => e.target.value ? assignToGroup(peserta.id, e.target.value) : removeFromGroup(peserta.id)}
                               className="w-full text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-red-500"
                             >
                               <option value="">Pilih Grup</option>
@@ -779,7 +839,7 @@ const DataPeserta: React.FC = () => {
                   onChange={(e) => setNewGroupName(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   placeholder="Masukkan nama grup"
-                  onKeyPress={(e) => e.key === 'Enter' && createNewGroup()}
+                  onKeyDown={(e) => e.key === 'Enter' && createNewGroup()}
                 />
               </div>
               <div className="flex space-x-3 pt-4">
@@ -806,51 +866,6 @@ const DataPeserta: React.FC = () => {
         </div>
       )}
 
-      {/* Edit Posisi Modal */}
-      {showEditPosisiForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">
-              Edit Posisi Juara
-            </h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Posisi Juara
-                </label>
-                <select
-                  value={editPosisi}
-                  onChange={(e) => setEditPosisi(parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                >
-                  <option value={0}>Belum Juara</option>
-                  <option value={1}>Juara 1</option>
-                  <option value={2}>Juara 2</option>
-                  <option value={3}>Juara 3</option>
-                </select>
-              </div>
-              <div className="flex space-x-3 pt-4">
-                <button
-                  onClick={updatePosisi}
-                  className="flex-1 bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-                >
-                  Update
-                </button>
-                <button
-                  onClick={() => {
-                    setShowEditPosisiForm(false)
-                    setEditingPesertaId(null)
-                    setEditPosisi(0)
-                  }}
-                  className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                >
-                  Batal
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

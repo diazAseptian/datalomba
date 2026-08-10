@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { collection, getDocs, query, where } from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import { Trophy, Users, Calendar, Award } from 'lucide-react'
+import { useTahun } from '../contexts/TahunContext'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 interface Stats {
@@ -13,6 +15,7 @@ interface Stats {
 }
 
 const Dashboard: React.FC = () => {
+  const { tahunAktif } = useTahun()
   const [stats, setStats] = useState<Stats>({
     totalLomba: 0,
     totalPeserta: 0,
@@ -25,70 +28,44 @@ const Dashboard: React.FC = () => {
   const [pieData, setPieData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchStats()
-  }, [])
+  useEffect(() => { fetchStats() }, [tahunAktif])
 
   const fetchStats = async () => {
+    setLoading(true)
     try {
-      // Get total competitions
-      const { count: lombaCount } = await supabase
-        .from('lomba')
-        .select('*', { count: 'exact', head: true })
+      // Ambil lomba tahun aktif dulu, lalu filter peserta berdasarkan lomba_id
+      const lombaSnap = await getDocs(collection(db, 'lomba'))
+      const lombaIds = lombaSnap.docs
+        .filter(d => ((d.data() as any).tahun ?? new Date((d.data() as any).tanggal).getFullYear()) === tahunAktif)
+        .map(d => d.id)
 
-      // Get total participants
-      const { count: pesertaCount } = await supabase
-        .from('peserta')
-        .select('*', { count: 'exact', head: true })
-
-      // Get winners by position
-      const { count: juara1Count } = await supabase
-        .from('peserta')
-        .select('*', { count: 'exact', head: true })
-        .eq('posisi', 1)
-
-      const { count: juara2Count } = await supabase
-        .from('peserta')
-        .select('*', { count: 'exact', head: true })
-        .eq('posisi', 2)
-
-      const { count: juara3Count } = await supabase
-        .from('peserta')
-        .select('*', { count: 'exact', head: true })
-        .eq('posisi', 3)
-
-      const { count: belumJuaraCount } = await supabase
-        .from('peserta')
-        .select('*', { count: 'exact', head: true })
-        .eq('posisi', 0)
+      const pesertaSnap = await getDocs(collection(db, 'peserta'))
+      const peserta = pesertaSnap.docs
+        .map(d => d.data() as any)
+        .filter(p => lombaIds.includes(p.lomba_id))
 
       const newStats = {
-        totalLomba: lombaCount || 0,
-        totalPeserta: pesertaCount || 0,
-        totalJuara1: juara1Count || 0,
-        totalJuara2: juara2Count || 0,
-        totalJuara3: juara3Count || 0,
-        belumJuara: belumJuaraCount || 0,
+        totalLomba: lombaIds.length,
+        totalPeserta: peserta.length,
+        totalJuara1: peserta.filter(p => p.posisi === 1).length,
+        totalJuara2: peserta.filter(p => p.posisi === 2).length,
+        totalJuara3: peserta.filter(p => p.posisi === 3).length,
+        belumJuara: peserta.filter(p => p.posisi === 0).length,
       }
 
       setStats(newStats)
-
-      // Prepare bar chart data
       setChartData([
         { name: 'Juara 1', value: newStats.totalJuara1, fill: '#FFD700' },
         { name: 'Juara 2', value: newStats.totalJuara2, fill: '#C0C0C0' },
         { name: 'Juara 3', value: newStats.totalJuara3, fill: '#CD7F32' },
         { name: 'Belum Juara', value: newStats.belumJuara, fill: '#94A3B8' },
       ])
-
-      // Prepare pie chart data
       setPieData([
         { name: 'Juara 1', value: newStats.totalJuara1, fill: '#FFD700' },
         { name: 'Juara 2', value: newStats.totalJuara2, fill: '#C0C0C0' },
         { name: 'Juara 3', value: newStats.totalJuara3, fill: '#CD7F32' },
         { name: 'Belum Juara', value: newStats.belumJuara, fill: '#94A3B8' },
       ])
-
       setLoading(false)
     } catch (error) {
       console.error('Error fetching stats:', error)
@@ -105,46 +82,20 @@ const Dashboard: React.FC = () => {
   }
 
   const cards = [
-    {
-      name: 'Total Lomba',
-      value: stats.totalLomba,
-      icon: Calendar,
-      color: 'bg-blue-500',
-    },
-    {
-      name: 'Total Peserta',
-      value: stats.totalPeserta,
-      icon: Users,
-      color: 'bg-green-500',
-    },
-    {
-      name: 'Juara 1',
-      value: stats.totalJuara1,
-      icon: Trophy,
-      color: 'bg-yellow-500',
-    },
-    {
-      name: 'Juara 2',
-      value: stats.totalJuara2,
-      icon: Award,
-      color: 'bg-gray-400',
-    },
-    {
-      name: 'Juara 3',
-      value: stats.totalJuara3,
-      icon: Award,
-      color: 'bg-orange-600',
-    },
+    { name: 'Total Lomba', value: stats.totalLomba, icon: Calendar, color: 'bg-blue-500' },
+    { name: 'Total Peserta', value: stats.totalPeserta, icon: Users, color: 'bg-green-500' },
+    { name: 'Juara 1', value: stats.totalJuara1, icon: Trophy, color: 'bg-yellow-500' },
+    { name: 'Juara 2', value: stats.totalJuara2, icon: Award, color: 'bg-gray-400' },
+    { name: 'Juara 3', value: stats.totalJuara3, icon: Award, color: 'bg-orange-600' },
   ]
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Statistik Lomba 17 Agustus Taruna Karya</p>
+        <p className="text-gray-600">Statistik Lomba 17 Agustus {tahunAktif} · Taruna Karya</p>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 lg:gap-6">
         {cards.map((card, index) => {
           const Icon = card.icon
@@ -157,14 +108,10 @@ const Dashboard: React.FC = () => {
                       <Icon className="h-4 w-4 sm:h-6 sm:w-6 text-white" />
                     </div>
                   </div>
-                  <div className="sm:ml-5 w-0 flex-1 text-center sm:text-left">
+                  <div className="sm:ml-5 w-full sm:w-0 flex-1 text-center sm:text-left">
                     <dl>
-                      <dt className="text-xs sm:text-sm font-medium text-gray-500 truncate">
-                        {card.name}
-                      </dt>
-                      <dd className="text-xl sm:text-3xl font-bold text-gray-900">
-                        {card.value}
-                      </dd>
+                      <dt className="text-xs sm:text-sm font-medium text-gray-500 truncate">{card.name}</dt>
+                      <dd className="text-xl sm:text-3xl font-bold text-gray-900">{card.value}</dd>
                     </dl>
                   </div>
                 </div>
@@ -174,60 +121,48 @@ const Dashboard: React.FC = () => {
         })}
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-        {/* Bar Chart */}
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow">
-          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">
-            Distribusi Posisi Peserta
-          </h3>
+          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">Distribusi Posisi Peserta</h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="name" 
-                fontSize={12}
-                angle={-45}
-                textAnchor="end"
-                height={60}
-              />
-              <YAxis fontSize={12} />
+              <XAxis dataKey="name" fontSize={12} angle={-45} textAnchor="end" height={60} />
+              <YAxis fontSize={12} allowDecimals={false} />
               <Tooltip />
-              <Bar dataKey="value" fill="#8884d8" />
+              <Bar dataKey="value">
+                {chartData.map((entry, index) => (
+                  <Cell key={`bar-${index}`} fill={entry.fill} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Pie Chart */}
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow">
-          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">
-            Persentase Juara
-          </h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => {
-                  // Hide labels on small screens
-                  if (window.innerWidth < 640) {
-                    return `${(percent * 100).toFixed(0)}%`
-                  }
-                  return `${name} (${(percent * 100).toFixed(0)}%)`
-                }}
-                outerRadius={window.innerWidth < 640 ? 60 : 80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {pieData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.fill} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">Persentase Juara</h3>
+          {pieData.every(d => d.value === 0) ? (
+            <div className="flex items-center justify-center h-[250px] text-sm text-gray-400">Belum ada data peserta</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie
+                  data={pieData.filter(d => d.value > 0)}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  dataKey="value"
+                >
+                  {pieData.filter(d => d.value > 0).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
     </div>

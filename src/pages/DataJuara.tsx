@@ -1,16 +1,13 @@
 import React, { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { collection, getDocs, query, orderBy, where } from 'firebase/firestore'
+import { db, Lomba, Peserta as PesertaType, Grup } from '../lib/firebase'
 import { Download, Trophy, Filter } from 'lucide-react'
+import { useTahun } from '../contexts/TahunContext'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
-import { Database } from '../lib/supabase'
+import Toast, { ToastType } from '../components/Toast'
 
-type Peserta = Database['public']['Tables']['peserta']['Row'] & {
-  lomba?: { nama: string }
-  grup?: { nama: string }
-}
-type Lomba = Database['public']['Tables']['lomba']['Row']
-type Grup = Database['public']['Tables']['grup']['Row']
+type Peserta = PesertaType
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -23,79 +20,72 @@ const DataJuara: React.FC = () => {
   const [lomba, setLomba] = useState<Lomba[]>([])
   const [groups, setGroups] = useState<Grup[]>([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({
-    lomba_id: '',
-    grup_id: '',
-    posisi: '',
-  })
+  const [filters, setFilters] = useState({ lomba_id: '', grup_id: '', posisi: '' })
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null)
+  const { tahunAktif } = useTahun()
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  const showToast = (message: string, type: ToastType) => setToast({ message, type })
 
-  useEffect(() => {
-    fetchPeserta()
-  }, [filters])
+  useEffect(() => { fetchData() }, [tahunAktif])
+  useEffect(() => { fetchPeserta() }, [filters])
 
   const fetchData = async () => {
-    // Fetch all lomba for dropdown
-    const { data: lombaData } = await supabase
-      .from('lomba')
-      .select('*')
-      .order('nama')
-
-    if (lombaData) setLomba(lombaData)
-    await fetchPeserta()
-    setLoading(false)
-  }
-
-  const fetchGroups = async () => {
-    if (!filters.lomba_id) {
-      setGroups([])
-      return
+    setLoading(true)
+    try {
+      const lombaSnap = await getDocs(query(collection(db, 'lomba'), orderBy('nama')))
+      const lombaList = lombaSnap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Lomba))
+        .filter(l => ((l as any).tahun ?? new Date(l.tanggal).getFullYear()) === tahunAktif)
+      setLomba(lombaList)
+      setFilters({ lomba_id: '', grup_id: '', posisi: '' })
+      await fetchPeserta(lombaList)
+    } catch {
+      showToast('Gagal memuat data', 'error')
+    } finally {
+      setLoading(false)
     }
-    
-    const { data } = await supabase
-      .from('grup')
-      .select('*')
-      .eq('lomba_id', filters.lomba_id)
-      .order('nama')
-    
-    if (data) setGroups(data)
   }
 
   useEffect(() => {
-    fetchGroups()
-    setFilters(prev => ({ ...prev, grup_id: '' })) // Reset grup filter when lomba changes
+    if (!filters.lomba_id) {
+      setGroups([])
+      setFilters(prev => ({ ...prev, grup_id: '' }))
+      return
+    }
+    getDocs(query(collection(db, 'grup'), where('lomba_id', '==', filters.lomba_id), orderBy('nama')))
+      .then(snap => setGroups(snap.docs.map(d => ({ id: d.id, ...d.data() } as Grup))))
+    setFilters(prev => ({ ...prev, grup_id: '' }))
   }, [filters.lomba_id])
 
-  const fetchPeserta = async () => {
-    let query = supabase
-      .from('peserta')
-      .select(`
-        *,
-        lomba:lomba_id (nama),
-        grup:grup_id (nama)
-      `)
-      .gt('posisi', 0) // Only winners
+  const fetchPeserta = async (lombaList?: Lomba[]) => {
+    try {
+      const snap = await getDocs(query(collection(db, 'peserta'), where('posisi', '>', 0)))
+      // Ambil semua grup sekaligus agar nama grup selalu muncul
+      const grupSnap = await getDocs(collection(db, 'grup'))
+      const grupMap = new Map(grupSnap.docs.map(d => [d.id, (d.data() as any).nama as string]))
 
-    if (filters.lomba_id) {
-      query = query.eq('lomba_id', filters.lomba_id)
+      const currentLomba = lombaList || lomba
+      const lombaMap = new Map(currentLomba.map(l => [l.id, l.nama]))
+
+      let result = snap.docs.map(d => {
+        const data = { id: d.id, ...d.data() } as Peserta
+        data.lomba = lombaMap.has(data.lomba_id) ? { nama: lombaMap.get(data.lomba_id)! } : undefined
+        data.grup = data.grup_id && grupMap.has(data.grup_id) ? { nama: grupMap.get(data.grup_id)! } : undefined
+        return data
+      })
+
+      // Hanya tampilkan peserta dari lomba tahun aktif
+      result = result.filter(p => p.lomba !== undefined)
+
+      if (filters.lomba_id) result = result.filter(p => p.lomba_id === filters.lomba_id)
+      if (filters.grup_id) result = result.filter(p => p.grup_id === filters.grup_id)
+      if (filters.posisi) result = result.filter(p => p.posisi === parseInt(filters.posisi))
+
+      result.sort((a, b) => (a.grup?.nama || '').localeCompare(b.grup?.nama || '') || a.posisi - b.posisi)
+      setPeserta(result)
+    } catch {
+      showToast('Gagal memuat data juara', 'error')
     }
-
-    if (filters.grup_id) {
-      query = query.eq('grup_id', filters.grup_id)
-    }
-
-    if (filters.posisi) {
-      query = query.eq('posisi', parseInt(filters.posisi))
-    }
-
-    query = query.order('posisi').order('nama')
-
-    const { data } = await query
-
-    if (data) setPeserta(data)
   }
 
   const getPosisiText = (posisi: number) => {
@@ -131,55 +121,80 @@ const DataJuara: React.FC = () => {
       doc.text('Taruna Karya Kampung Ciperang', 105, 30, { align: 'center' })
       doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 105, 40, { align: 'center' })
 
-      // Table setup
-      const startY = 60
-      const rowHeight = 10
-      const cols = [
-        { header: 'No', x: 15, width: 15 },
-        { header: 'Nama Peserta', x: 30, width: 50 },
-        { header: 'Lomba', x: 80, width: 45 },
-        { header: 'Grup', x: 125, width: 30 },
-        { header: 'Juara', x: 155, width: 30 }
-      ]
+      let currentY = 60
+      const rowHeight = 8
+      const groupSpacing = 15
+      
+      // Group data by grup
+      const groupedData = peserta.reduce((acc, item) => {
+        const grupKey = item.grup?.nama || 'Tanpa Grup'
+        if (!acc[grupKey]) acc[grupKey] = []
+        acc[grupKey].push(item)
+        return acc
+      }, {} as Record<string, typeof peserta>)
 
-      // Draw table header
-      doc.setFontSize(10)
-      doc.setFont('helvetica', 'bold')
-      cols.forEach(col => {
-        doc.text(col.header, col.x, startY)
+      // Sort groups numerically (Grup 1, Grup 2, etc.)
+      const sortedGroups = Object.keys(groupedData).sort((a, b) => {
+        const numA = parseInt(a.replace(/\D/g, '')) || 999
+        const numB = parseInt(b.replace(/\D/g, '')) || 999
+        return numA - numB
       })
       
-      // Header line
-      doc.line(15, startY + 2, 185, startY + 2)
-      
-      // Data rows
-      doc.setFont('helvetica', 'normal')
-      let currentY = startY + rowHeight
-      
-      peserta.forEach((item, index) => {
-        if (currentY > 270) {
+      sortedGroups.forEach((grupNama) => {
+        const grupPeserta = groupedData[grupNama].sort((a, b) => a.posisi - b.posisi)
+        
+        // Check if we need a new page
+        if (currentY > 250) {
           doc.addPage()
           currentY = 20
         }
         
-        // Truncate long text
-        const truncateText = (text: string, maxLength: number) => {
-          return text.length > maxLength ? text.substring(0, maxLength - 3) + '...' : text
-        }
+        // Group header
+        doc.setFontSize(12)
+        doc.setFont('helvetica', 'bold')
+        doc.text(`Grup: ${grupNama}`, 15, currentY)
+        currentY += 10
         
-        doc.text((index + 1).toString(), cols[0].x, currentY)
-        doc.text(truncateText(item.nama || '', 20), cols[1].x, currentY)
-        doc.text(truncateText(item.lomba?.nama || '-', 18), cols[2].x, currentY)
-        doc.text(truncateText(item.grup?.nama || '-', 12), cols[3].x, currentY)
-        doc.text(getPosisiText(item.posisi), cols[4].x, currentY)
+        // Table header for this group
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'bold')
+        doc.text('No', 20, currentY)
+        doc.text('Nama Peserta', 35, currentY)
+        doc.text('Lomba', 90, currentY)
+        doc.text('Juara', 140, currentY)
         
-        currentY += rowHeight
+        // Header line
+        doc.line(15, currentY + 2, 185, currentY + 2)
+        currentY += 8
+        
+        // Group data
+        doc.setFont('helvetica', 'normal')
+        grupPeserta.forEach((item, index) => {
+          if (currentY > 270) {
+            doc.addPage()
+            currentY = 20
+          }
+          
+          const truncateText = (text: string, maxLength: number) => {
+            return text.length > maxLength ? text.substring(0, maxLength - 3) + '...' : text
+          }
+          
+          doc.text((index + 1).toString(), 20, currentY)
+          doc.text(truncateText(item.nama || '', 25), 35, currentY)
+          doc.text(truncateText(item.lomba?.nama || '-', 22), 90, currentY)
+          doc.text(getPosisiText(item.posisi), 140, currentY)
+          
+          currentY += rowHeight
+        })
+        
+        currentY += groupSpacing
       })
 
-      doc.save('daftar-juara.pdf')
+      doc.save('daftar-juara-per-grup.pdf')
+      showToast('PDF berhasil diexport', 'success')
     } catch (error) {
       console.error('Error generating PDF:', error)
-      alert('Gagal membuat PDF. Silakan coba lagi.')
+      showToast('Gagal membuat PDF. Silakan coba lagi.', 'error')
     }
   }
 
@@ -193,10 +208,11 @@ const DataJuara: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Data Juara</h1>
-          <p className="text-gray-600">Daftar pemenang lomba 17 Agustus</p>
+          <p className="text-gray-600">Daftar pemenang lomba 17 Agustus {tahunAktif}</p>
         </div>
         <button
           onClick={exportToPDF}
@@ -274,11 +290,11 @@ const DataJuara: React.FC = () => {
             <div className="text-center py-12">
               <Trophy className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">
-                {filters.lomba_id || filters.posisi ? 'Tidak ada juara sesuai filter' : 'Belum ada juara'}
+                {filters.lomba_id || filters.grup_id || filters.posisi ? 'Tidak ada juara sesuai filter' : 'Belum ada juara'}
               </h3>
               <p className="mt-1 text-sm text-gray-500">
-                {filters.lomba_id || filters.posisi 
-                  ? 'Coba ubah filter untuk melihat data lain.' 
+                {filters.lomba_id || filters.grup_id || filters.posisi
+                  ? 'Coba ubah filter untuk melihat data lain.'
                   : 'Juara akan muncul setelah ada peserta yang mendapat posisi.'
                 }
               </p>

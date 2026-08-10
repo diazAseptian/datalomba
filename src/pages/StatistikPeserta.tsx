@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { User, Trophy, BarChart3 } from 'lucide-react'
-import { Database } from '../lib/supabase'
+import { collection, getDocs } from 'firebase/firestore'
+import { db } from '../lib/firebase'
+import { User, Trophy, BarChart3, Search } from 'lucide-react'
+import Toast, { ToastType } from '../components/Toast'
+import { useTahun } from '../contexts/TahunContext'
 
 type PesertaStats = {
   nama: string
@@ -13,53 +15,52 @@ type PesertaStats = {
 }
 
 const StatistikPeserta: React.FC = () => {
+  const { tahunAktif } = useTahun()
   const [stats, setStats] = useState<PesertaStats[]>([])
   const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null)
 
-  useEffect(() => {
-    fetchStats()
-  }, [])
+  const showToast = (message: string, type: ToastType) => setToast({ message, type })
+
+  useEffect(() => { fetchStats() }, [tahunAktif])
 
   const fetchStats = async () => {
-    const { data: pesertaData } = await supabase
-      .from('peserta')
-      .select(`
-        nama,
-        posisi,
-        lomba:lomba_id (nama)
-      `)
-
-    if (pesertaData) {
+    setLoading(true)
+    try {
+      const [pesertaSnap, lombaSnap] = await Promise.all([
+        getDocs(collection(db, 'peserta')),
+        getDocs(collection(db, 'lomba')),
+      ])
+      const lombaMap = new Map(lombaSnap.docs.map(d => [d.id, (d.data() as any).nama as string]))
+      const lombaIds = new Set(lombaSnap.docs
+        .filter(d => ((d.data() as any).tahun ?? new Date((d.data() as any).tanggal).getFullYear()) === tahunAktif)
+        .map(d => d.id))
       const statsMap = new Map<string, PesertaStats>()
-
-      pesertaData.forEach((peserta) => {
+      pesertaSnap.docs.forEach(d => {
+        const peserta = d.data() as any
+        if (!lombaIds.has(peserta.lomba_id)) return  // skip lomba tahun lain
         const nama = peserta.nama
-        const lombaName = peserta.lomba?.nama || 'Unknown'
-        
+        const lombaName = lombaMap.get(peserta.lomba_id) || 'Unknown'
         if (!statsMap.has(nama)) {
-          statsMap.set(nama, {
-            nama,
-            totalLomba: 0,
-            lombaList: [],
-            juara1: 0,
-            juara2: 0,
-            juara3: 0
-          })
+          statsMap.set(nama, { nama, totalLomba: 0, lombaList: [], juara1: 0, juara2: 0, juara3: 0 })
         }
-
         const stat = statsMap.get(nama)!
         stat.totalLomba++
         stat.lombaList.push(lombaName)
-        
         if (peserta.posisi === 1) stat.juara1++
         else if (peserta.posisi === 2) stat.juara2++
         else if (peserta.posisi === 3) stat.juara3++
       })
-
       setStats(Array.from(statsMap.values()).sort((a, b) => b.totalLomba - a.totalLomba))
+    } catch {
+      showToast('Gagal memuat statistik', 'error')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
+
+  const filteredStats = stats.filter(s => s.nama.toLowerCase().includes(searchQuery.toLowerCase()))
 
   if (loading) {
     return (
@@ -71,14 +72,29 @@ const StatistikPeserta: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Statistik Peserta</h1>
-        <p className="text-gray-600">Statistik partisipasi dan prestasi peserta</p>
+        <p className="text-gray-600">Statistik partisipasi dan prestasi peserta tahun {tahunAktif}</p>
+      </div>
+
+      <div className="bg-white p-4 rounded-lg shadow">
+        <div className="flex items-center space-x-2">
+          <Search className="h-4 w-4 text-gray-500" />
+          <input
+            type="text"
+            placeholder="Cari nama peserta..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 w-full sm:w-64"
+          />
+          <span className="text-sm text-gray-500 whitespace-nowrap">{filteredStats.length} peserta</span>
+        </div>
       </div>
 
       <div className="bg-white shadow overflow-hidden sm:rounded-md">
         <div className="px-4 py-5 sm:p-6">
-          {stats.length === 0 ? (
+          {filteredStats.length === 0 ? (
             <div className="text-center py-12">
               <BarChart3 className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">Belum ada data</h3>
@@ -90,7 +106,7 @@ const StatistikPeserta: React.FC = () => {
             <div>
               {/* Mobile Card View */}
               <div className="block sm:hidden space-y-4">
-                {stats.map((stat, index) => (
+                {filteredStats.map((stat, index) => (
                   <div key={stat.nama} className="bg-gray-50 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center">
@@ -151,7 +167,7 @@ const StatistikPeserta: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {stats.map((stat, index) => (
+                    {filteredStats.map((stat, index) => (
                       <tr key={stat.nama} className="hover:bg-gray-50">
                         <td className="px-3 lg:px-6 py-4 whitespace-nowrap">
                           <div className="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-sm font-medium">

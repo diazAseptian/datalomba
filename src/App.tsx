@@ -1,6 +1,7 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { TahunProvider } from './contexts/TahunContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
 import Login from './pages/Login'
@@ -9,15 +10,20 @@ import DataLomba from './pages/DataLomba'
 import DataPeserta from './pages/DataPeserta'
 import DataJuara from './pages/DataJuara'
 import StatistikPeserta from './pages/StatistikPeserta'
+import LandingPage from './pages/LandingPage'
+import LombaDetail from './pages/LombaDetail'
 
 function App() {
   return (
     <AuthProvider>
+      <TahunProvider>
       <Router>
         <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/lomba/:id" element={<LombaDetail />} />
           <Route path="/login" element={<Login />} />
           <Route
-            path="/*"
+            path="/admin/*"
             element={
               <ProtectedRoute>
                 <Layout>
@@ -34,6 +40,7 @@ function App() {
           />
         </Routes>
       </Router>
+      </TahunProvider>
     </AuthProvider>
   )
 }
